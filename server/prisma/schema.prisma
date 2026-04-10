@@ -1,0 +1,98 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  plan      String   @default("Starter") // Starter, Pro, Business
+  stripeId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts   Contact[]
+  audiences  Audience[]
+  templates  Template[]
+  campaigns  Campaign[]
+}
+
+model Contact {
+  id           String   @id @default(uuid())
+  email        String
+  name         String?
+  attributes   Json?
+  unsubscribed Boolean  @default(false)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  audiences Audience[]
+  events    CampaignEvent[]
+
+  @@unique([userId, email])
+}
+
+model Audience {
+  id        String   @id @default(uuid())
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts Contact[]
+  campaigns Campaign[]
+}
+
+model Template {
+  id          String   @id @default(uuid())
+  name        String
+  htmlContent String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaigns Campaign[]
+}
+
+model Campaign {
+  id         String   @id @default(uuid())
+  name       String
+  subject    String
+  status     String   @default("DRAFT") // DRAFT, SCHEDULED, SENDING, COMPLETED
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  templateId String?
+  template   Template? @relation(fields: [templateId], references: [id])
+  sentCount  Int      @default(0)
+  openCount  Int      @default(0)
+  clickCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  audiences Audience[]
+  events    CampaignEvent[]
+}
+
+model CampaignEvent {
+  id         String   @id @default(uuid())
+  type       String   // OPEN, CLICK, BOUNCE
+  url        String?  // for CLICK events
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+  contactId  String
+  contact    Contact  @relation(fields: [contactId], references: [id])
+  createdAt  DateTime @default(now())
+}
