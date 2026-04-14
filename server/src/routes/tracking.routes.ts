@@ -1,5 +1,12 @@
 import { Router } from 'express';
-import { trackOpen, trackClick, unsubscribe, getCampaignAnalytics, getOverallAnalytics } from '../controllers/tracking.controller';
+import {
+  trackOpen,
+  trackClick,
+  unsubscribe,
+  getCampaignAnalytics,
+  getOverallAnalytics,
+  getCampaignRecipientStatuses,
+} from '../controllers/tracking.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -12,5 +19,6 @@ router.get('/unsubscribe/:contactId', unsubscribe);
 // Protected analytics endpoints
 router.get('/analytics/overview', requireAuth, getOverallAnalytics);
 router.get('/analytics/:campaignId', requireAuth, getCampaignAnalytics);
+router.get('/analytics/:campaignId/recipients', requireAuth, getCampaignRecipientStatuses);
 
 export default router;

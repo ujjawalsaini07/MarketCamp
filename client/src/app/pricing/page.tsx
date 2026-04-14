@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { HiOutlineCheck, HiArrowRight, HiOutlineLightningBolt } from "react-icons/hi";
+import { apiRequest } from "@/lib/api";
 
 const plans = [
   {
@@ -74,8 +75,28 @@ const plans = [
 ];
 
 export default function PricingPage() {
-  const { user } = useAuth();
+  const { user, token, refreshUser } = useAuth();
   const [annual, setAnnual] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  const checkout = async (planName: string) => {
+    if (!token) return;
+    setLoadingPlan(planName);
+    try {
+      const plan = planName.toLowerCase();
+      const data = await apiRequest<{ url: string; mock?: boolean }>(
+        "/api/stripe/create-checkout-session",
+        { method: "POST", body: JSON.stringify({ plan }) },
+        token
+      );
+      if (data.mock) {
+        await refreshUser();
+      }
+      window.location.href = data.url;
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#fafaf8]">
@@ -156,13 +177,14 @@ export default function PricingPage() {
                 </div>
 
                 <button
+                  onClick={() => checkout(plan.name)}
                   className={`w-full py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 mb-8 flex items-center justify-center gap-2 ${
                     plan.popular
                       ? "bg-brand-dark text-white hover:bg-brand-base shadow-md hover:shadow-lg"
                       : "border-2 border-brand-dark text-brand-dark hover:bg-brand-dark hover:text-white"
                   }`}
                 >
-                  {plan.cta} <HiArrowRight />
+                  {loadingPlan === plan.name ? "Processing..." : plan.cta} <HiArrowRight />
                 </button>
 
                 <div className="space-y-3">

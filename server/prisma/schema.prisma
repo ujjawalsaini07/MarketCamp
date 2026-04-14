@@ -88,7 +88,7 @@ model Campaign {
 
 model CampaignEvent {
   id         String   @id @default(uuid())
-  type       String   // OPEN, CLICK, BOUNCE
+  type       String   // SENT, OPEN, CLICK, PAGE_VISIT, UNSUBSCRIBE, BOUNCE
   url        String?  // for CLICK events
   campaignId String
   campaign   Campaign @relation(fields: [campaignId], references: [id])

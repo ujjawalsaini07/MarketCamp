@@ -1,22 +1,12 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState } from "react";
-import Link from "next/link";
-import {
-  HiOutlinePlus,
-  HiOutlineSearch,
-  HiOutlineDotsVertical,
-  HiOutlineMail,
-  HiOutlineEye,
-  HiOutlineCursorClick,
-  HiOutlineTrash,
-  HiOutlinePencil,
-  HiOutlinePlay,
-} from "react-icons/hi";
+import { useEffect, useState } from "react";
+import { HiOutlineSearch, HiOutlineMail, HiOutlineEye, HiOutlineCursorClick, HiOutlineTrash, HiOutlinePlay } from "react-icons/hi";
+import { useAuth } from "@/context/AuthContext";
+import { apiRequest } from "@/lib/api";
 
 type CampaignStatus = "DRAFT" | "SCHEDULED" | "SENDING" | "COMPLETED";
-
 interface Campaign {
   id: string;
   name: string;
@@ -25,16 +15,22 @@ interface Campaign {
   sentCount: number;
   openCount: number;
   clickCount: number;
-  createdAt: string;
 }
-
-const mockCampaigns: Campaign[] = [
-  { id: "1", name: "Spring Sale Announcement", subject: "🌸 Spring Sale — Up to 50% Off!", status: "COMPLETED", sentCount: 2450, openCount: 1102, clickCount: 387, createdAt: "2026-04-08" },
-  { id: "2", name: "Weekly Newsletter #12", subject: "This Week in Marketing", status: "COMPLETED", sentCount: 3100, openCount: 1395, clickCount: 496, createdAt: "2026-04-05" },
-  { id: "3", name: "Product Launch Teaser", subject: "Something big is coming...", status: "SENDING", sentCount: 890, openCount: 0, clickCount: 0, createdAt: "2026-04-10" },
-  { id: "4", name: "Re-engagement Series", subject: "We miss you! Here's 20% off", status: "DRAFT", sentCount: 0, openCount: 0, clickCount: 0, createdAt: "2026-04-10" },
-  { id: "5", name: "Welcome Email Flow", subject: "Welcome to the family!", status: "SCHEDULED", sentCount: 0, openCount: 0, clickCount: 0, createdAt: "2026-04-09" },
-];
+interface Template {
+  id: string;
+  name: string;
+}
+interface Audience {
+  id: string;
+  name: string;
+}
+interface RecipientStatus {
+  contactId: string;
+  email: string;
+  name: string | null;
+  status: "PENDING" | "SENT" | "OPENED" | "CLICKED" | "UNSUBSCRIBED";
+  pageVisits: number;
+}
 
 const statusStyles: Record<CampaignStatus, string> = {
   COMPLETED: "bg-emerald-50 text-emerald-600 border-emerald-100",
@@ -46,15 +42,113 @@ const statusStyles: Record<CampaignStatus, string> = {
 const statusFilters: CampaignStatus[] = ["DRAFT", "SCHEDULED", "SENDING", "COMPLETED"];
 
 export default function CampaignsPage() {
+  const { token } = useAuth();
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [audiences, setAudiences] = useState<Audience[]>([]);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<string>("ALL");
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [subject, setSubject] = useState("");
+  const [templateId, setTemplateId] = useState("");
+  const [audienceId, setAudienceId] = useState("");
+  const [csvData, setCsvData] = useState("email,name\njohn@example.com,John Doe");
+  const [audienceName, setAudienceName] = useState("Imported Contacts");
+  const [message, setMessage] = useState("");
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [recipients, setRecipients] = useState<RecipientStatus[]>([]);
 
-  const filtered = mockCampaigns.filter((c) => {
+  const load = async () => {
+    if (!token) return;
+    const [campaignData, templateData, audienceData] = await Promise.all([
+      apiRequest<{ campaigns: Campaign[] }>("/api/campaigns", {}, token),
+      apiRequest<{ templates: Template[] }>("/api/templates", {}, token),
+      apiRequest<{ audiences: Audience[] }>("/api/audiences", {}, token),
+    ]);
+    setCampaigns(campaignData.campaigns);
+    setTemplates(templateData.templates);
+    setAudiences(audienceData.audiences);
+  };
+
+  useEffect(() => {
+    load().catch((error) => setMessage(error.message));
+  }, [token]);
+
+  const filtered = campaigns.filter((c) => {
     const matchSearch = c.name.toLowerCase().includes(search.toLowerCase());
     const matchFilter = activeFilter === "ALL" || c.status === activeFilter;
     return matchSearch && matchFilter;
   });
+
+  const createCampaign = async () => {
+    if (!token || !name || !subject || !templateId || !audienceId) return;
+    try {
+      await apiRequest(
+        "/api/campaigns",
+        {
+          method: "POST",
+          body: JSON.stringify({ name, subject, templateId, audienceIds: [audienceId] }),
+        },
+        token
+      );
+      setName("");
+      setSubject("");
+      setMessage("Campaign created");
+      await load();
+    } catch (error: any) {
+      setMessage(error.message);
+    }
+  };
+
+  const sendCampaign = async (id: string) => {
+    if (!token) return;
+    try {
+      await apiRequest(`/api/campaigns/${id}/send`, { method: "POST" }, token);
+      setMessage("Campaign sent");
+      await load();
+    } catch (error: any) {
+      setMessage(error.message);
+    }
+  };
+
+  const deleteCampaign = async (id: string) => {
+    if (!token) return;
+    try {
+      await apiRequest(`/api/campaigns/${id}`, { method: "DELETE" }, token);
+      await load();
+    } catch (error: any) {
+      setMessage(error.message);
+    }
+  };
+
+  const loadRecipients = async (campaignId: string) => {
+    if (!token) return;
+    try {
+      const data = await apiRequest<{ recipients: RecipientStatus[] }>(
+        `/api/track/analytics/${campaignId}/recipients`,
+        {},
+        token
+      );
+      setSelectedCampaignId(campaignId);
+      setRecipients(data.recipients);
+    } catch (error: any) {
+      setMessage(error.message);
+    }
+  };
+
+  const importContacts = async () => {
+    if (!token) return;
+    try {
+      await apiRequest("/api/contacts/import", { method: "POST", body: JSON.stringify({ csvData }) }, token);
+      const contactsRes = await apiRequest<{ contacts: { id: string }[] }>("/api/contacts", {}, token);
+      const contactIds = contactsRes.contacts.map((c) => c.id);
+      await apiRequest("/api/audiences", { method: "POST", body: JSON.stringify({ name: audienceName, contactIds }) }, token);
+      await load();
+      setMessage("Contacts imported and audience created");
+    } catch (error: any) {
+      setMessage(error.message);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -65,10 +159,36 @@ export default function CampaignsPage() {
             <h1 className="text-3xl font-extrabold text-gray-900">Campaigns</h1>
             <p className="text-gray-500 mt-1">Manage and monitor your email campaigns.</p>
           </div>
-          <Link href="/email-builder" className="btn-primary flex items-center gap-2 text-sm">
-            <HiOutlinePlus className="text-lg" />
-            Create Campaign
-          </Link>
+          <span className="text-sm text-brand-dark">{message}</span>
+        </div>
+
+        <div className="card mb-6 grid md:grid-cols-2 gap-3">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name" className="px-3 py-2 rounded-lg border" />
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" className="px-3 py-2 rounded-lg border" />
+          <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className="px-3 py-2 rounded-lg border">
+            <option value="">Select template</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <select value={audienceId} onChange={(e) => setAudienceId(e.target.value)} className="px-3 py-2 rounded-lg border">
+            <option value="">Select audience</option>
+            {audiences.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          <button onClick={createCampaign} className="btn-primary">Create Campaign</button>
+        </div>
+
+        <div className="card mb-6">
+          <p className="font-semibold mb-2">Bulk import contacts (CSV)</p>
+          <input value={audienceName} onChange={(e) => setAudienceName(e.target.value)} placeholder="Audience name" className="px-3 py-2 rounded-lg border mb-3 w-full" />
+          <textarea value={csvData} onChange={(e) => setCsvData(e.target.value)} rows={5} className="w-full px-3 py-2 rounded-lg border font-mono text-xs" />
+          <button onClick={importContacts} className="btn-primary mt-3">Import and Create Audience</button>
         </div>
 
         {/* Filters */}
@@ -152,29 +272,21 @@ export default function CampaignsPage() {
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="relative">
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setMenuOpen(menuOpen === campaign.id ? null : campaign.id)}
-                    className="w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
+                    onClick={() => loadRecipients(campaign.id)}
+                    className="px-3 py-2 rounded-lg border text-xs text-gray-700"
                   >
-                    <HiOutlineDotsVertical className="text-gray-400" />
+                    Monitor
                   </button>
-                  {menuOpen === campaign.id && (
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-10">
-                      <button className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                        <HiOutlinePencil className="text-gray-400" /> Edit
-                      </button>
-                      {campaign.status === "DRAFT" && (
-                        <button className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-brand-dark hover:bg-brand-bg/30 transition-colors">
-                          <HiOutlinePlay className="text-brand-dark" /> Send Now
-                        </button>
-                      )}
-                      <button className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors">
-                        <HiOutlineTrash className="text-red-400" /> Delete
-                      </button>
-                    </div>
+                  {campaign.status === "DRAFT" && (
+                    <button onClick={() => sendCampaign(campaign.id)} className="px-3 py-2 rounded-lg bg-brand-dark text-white text-xs flex items-center gap-1">
+                      <HiOutlinePlay /> Send
+                    </button>
                   )}
+                  <button onClick={() => deleteCampaign(campaign.id)} className="px-3 py-2 rounded-lg border text-xs text-red-500 flex items-center gap-1">
+                    <HiOutlineTrash /> Delete
+                  </button>
                 </div>
               </div>
             </div>
@@ -188,6 +300,34 @@ export default function CampaignsPage() {
             </div>
           )}
         </div>
+        {selectedCampaignId ? (
+          <div className="card mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-gray-900">Recipient status monitor</h3>
+              <span className="text-xs text-gray-500">{selectedCampaignId}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Email</th>
+                    <th className="text-left py-2">Status</th>
+                    <th className="text-right py-2">Page Visits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recipients.map((r) => (
+                    <tr key={r.contactId} className="border-b">
+                      <td className="py-2">{r.email}</td>
+                      <td className="py-2 font-medium">{r.status}</td>
+                      <td className="py-2 text-right">{r.pageVisits}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
       </div>
     </DashboardLayout>
   );

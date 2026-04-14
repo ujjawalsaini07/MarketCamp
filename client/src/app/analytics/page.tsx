@@ -1,6 +1,9 @@
 "use client";
 
 import DashboardLayout from "@/components/DashboardLayout";
+import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { apiRequest } from "@/lib/api";
 import {
   HiOutlineMail,
   HiOutlineEye,
@@ -10,20 +13,13 @@ import {
   HiOutlineCalendar,
 } from "react-icons/hi";
 
-const overviewStats = [
-  { label: "Emails Sent", value: "48,291", icon: HiOutlineMail, trend: "+12.3%", color: "bg-brand-dark" },
-  { label: "Open Rate", value: "44.6%", icon: HiOutlineEye, trend: "+2.1%", color: "bg-brand-base" },
-  { label: "Click Rate", value: "12.8%", icon: HiOutlineCursorClick, trend: "+3.4%", color: "bg-emerald-500" },
-  { label: "Bounce Rate", value: "1.2%", icon: HiOutlineBan, trend: "-0.5%", color: "bg-amber-500" },
-];
-
-const campaignPerformance = [
-  { name: "Spring Sale", sent: 2450, opens: 1102, clicks: 387, bounces: 12, unsubscribes: 5, openRate: 45.0, clickRate: 15.8 },
-  { name: "Newsletter #12", sent: 3100, opens: 1395, clicks: 496, bounces: 18, unsubscribes: 8, openRate: 45.0, clickRate: 16.0 },
-  { name: "Product Launch", sent: 890, opens: 423, clicks: 178, bounces: 5, unsubscribes: 2, openRate: 47.5, clickRate: 20.0 },
-  { name: "Welcome Flow", sent: 1540, opens: 924, clicks: 462, bounces: 8, unsubscribes: 1, openRate: 60.0, clickRate: 30.0 },
-  { name: "Birthday Offer", sent: 680, opens: 340, clicks: 136, bounces: 3, unsubscribes: 0, openRate: 50.0, clickRate: 20.0 },
-];
+interface Overview {
+  totalSent: number;
+  avgOpenRate: string;
+  avgClickRate: string;
+  totalPageVisits: number;
+  unsubscribeRate: string;
+}
 
 const dailyData = [
   { day: "Mon", sent: 1240, opens: 558 },
@@ -38,6 +34,55 @@ const dailyData = [
 const maxSent = Math.max(...dailyData.map((d) => d.sent));
 
 export default function AnalyticsPage() {
+  const { token } = useAuth();
+  const [overview, setOverview] = useState<Overview>({
+    totalSent: 0,
+    avgOpenRate: "0",
+    avgClickRate: "0",
+    totalPageVisits: 0,
+    unsubscribeRate: "0",
+  });
+  const [campaignPerformance, setCampaignPerformance] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      apiRequest<Overview>("/api/track/analytics/overview", {}, token),
+      apiRequest<{ campaigns: any[] }>("/api/campaigns", {}, token),
+    ]).then(async ([ov, campaignsRes]) => {
+      setOverview(ov);
+      const withAnalytics = await Promise.all(
+        campaignsRes.campaigns.map(async (campaign) => {
+          const metrics = await apiRequest<any>(`/api/track/analytics/${campaign.id}`, {}, token);
+          return {
+            name: campaign.name,
+            sent: campaign.sentCount,
+            opens: campaign.openCount,
+            clicks: campaign.clickCount,
+            bounces: metrics.totalBounces || 0,
+            unsubscribes: metrics.totalUnsubscribes || 0,
+            pageVisits: metrics.totalPageVisits || 0,
+            openRate: Number(metrics.openRate || 0),
+            clickRate: Number(metrics.clickRate || 0),
+          };
+        })
+      );
+      setCampaignPerformance(withAnalytics);
+    });
+  }, [token]);
+
+  const overviewStats = [
+    { label: "Emails Sent", value: overview.totalSent.toLocaleString(), icon: HiOutlineMail, trend: "Live", color: "bg-brand-dark" },
+    { label: "Open Rate", value: `${overview.avgOpenRate}%`, icon: HiOutlineEye, trend: "Live", color: "bg-brand-base" },
+    { label: "Click Rate", value: `${overview.avgClickRate}%`, icon: HiOutlineCursorClick, trend: "Live", color: "bg-emerald-500" },
+    {
+      label: "Unsubscribe Rate",
+      value: `${overview.unsubscribeRate}%`,
+      icon: HiOutlineBan,
+      trend: `${overview.totalPageVisits} page visits`,
+      color: "bg-amber-500",
+    },
+  ];
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
@@ -154,6 +199,7 @@ export default function AnalyticsPage() {
                   <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">Open Rate</th>
                   <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">Clicks</th>
                   <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">Click Rate</th>
+                  <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">Page Visits</th>
                   <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">Bounces</th>
                   <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3">Unsubs</th>
                 </tr>
@@ -171,6 +217,7 @@ export default function AnalyticsPage() {
                     <td className="px-6 py-4 text-right">
                       <span className="text-sm font-semibold text-brand-dark">{c.clickRate}%</span>
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 text-right">{c.pageVisits}</td>
                     <td className="px-6 py-4 text-sm text-gray-600 text-right">{c.bounces}</td>
                     <td className="px-6 py-4 text-sm text-gray-600 text-right">{c.unsubscribes}</td>
                   </tr>

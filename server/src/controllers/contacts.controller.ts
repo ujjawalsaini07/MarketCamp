@@ -1,11 +1,29 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma';
-import { parse } from 'csv-parse/sync';
+
+const parseCsvData = (csvData: string): Record<string, string>[] => {
+  const lines = csvData
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) {
+    return [];
+  }
+
+  const headers = lines[0].split(',').map((header) => header.trim());
+  return lines.slice(1).map((line) => {
+    const values = line.split(',').map((value) => value.trim());
+    return headers.reduce<Record<string, string>>((acc, key, index) => {
+      acc[key] = values[index] || '';
+      return acc;
+    }, {});
+  });
+};
 
 // Get all contacts for user
 export const getContacts = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const contacts = await prisma.contact.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -20,7 +38,7 @@ export const getContacts = async (req: Request, res: Response) => {
 // Create a contact
 export const createContact = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const { email, name, attributes } = req.body;
 
     if (!email) {
@@ -43,18 +61,14 @@ export const createContact = async (req: Request, res: Response) => {
 // Bulk import contacts via CSV
 export const importContacts = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const { csvData } = req.body;
 
     if (!csvData) {
       return res.status(400).json({ message: 'CSV data is required' });
     }
 
-    const records = parse(csvData, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    });
+    const records = parseCsvData(csvData);
 
     const contacts = [];
     const errors: string[] = [];
@@ -95,8 +109,8 @@ export const importContacts = async (req: Request, res: Response) => {
 // Delete a contact
 export const deleteContact = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const { id } = req.params;
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
 
     await prisma.contact.deleteMany({ where: { id, userId } });
     res.json({ message: 'Contact deleted' });
@@ -109,7 +123,7 @@ export const deleteContact = async (req: Request, res: Response) => {
 // Unsubscribe a contact  
 export const unsubscribeContact = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     await prisma.contact.update({
       where: { id },

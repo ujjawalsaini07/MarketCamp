@@ -1,10 +1,13 @@
 import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { prisma } from '../prisma';
+import { appConfig } from '../config';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-03-31.basil',
-});
+const stripe = appConfig.stripeSecretKey
+  ? new Stripe(appConfig.stripeSecretKey, {
+      apiVersion: '2026-03-25.dahlia',
+    })
+  : null;
 
 const PLANS: Record<string, { priceId: string; name: string }> = {
   starter: { priceId: 'price_starter_monthly', name: 'Starter' },
@@ -15,7 +18,7 @@ const PLANS: Record<string, { priceId: string; name: string }> = {
 // Create Stripe checkout session
 export const createCheckoutSession = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const { plan } = req.body;
 
     if (!plan || !PLANS[plan]) {
@@ -24,6 +27,17 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (!stripe) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { plan: PLANS[plan].name },
+      });
+      return res.json({
+        url: `${appConfig.frontendUrl}/payment-gateway?mode=mock&plan=${plan}`,
+        mock: true,
+      });
+    }
 
     // Create or retrieve Stripe customer
     let customerId = user.stripeId;
@@ -40,7 +54,7 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
       });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = appConfig.frontendUrl;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -66,10 +80,13 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
 
 // Stripe webhook handler
 export const handleWebhook = async (req: Request, res: Response) => {
+  if (!stripe) {
+    return res.status(400).json({ message: 'Stripe is not configured' });
+  }
   const sig = req.headers['stripe-signature'] as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
-  let event: Stripe.Event;
+  let event: any;
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
@@ -80,7 +97,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
 
   switch (event.type) {
     case 'checkout.session.completed': {
-      const session = event.data.object as Stripe.Checkout.Session;
+      const session = event.data.object as any;
       const userId = session.metadata?.userId;
       const plan = session.metadata?.plan;
 
@@ -94,7 +111,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
     }
 
     case 'customer.subscription.deleted': {
-      const subscription = event.data.object as Stripe.Subscription;
+      const subscription = event.data.object as any;
       const customer = await stripe.customers.retrieve(subscription.customer as string);
       if ('metadata' in customer && customer.metadata.userId) {
         await prisma.user.update({
@@ -112,7 +129,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
 // Get billing info
 export const getBillingInfo = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
     if (!user) return res.status(404).json({ message: 'User not found' });

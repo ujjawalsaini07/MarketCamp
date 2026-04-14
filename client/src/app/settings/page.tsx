@@ -2,7 +2,8 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/context/AuthContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { apiRequest } from "@/lib/api";
 import {
   HiOutlineMail,
   HiOutlineGlobe,
@@ -12,7 +13,7 @@ import {
 } from "react-icons/hi";
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [emailServiceUrl, setEmailServiceUrl] = useState("https://your-emailvercel.vercel.app");
   const [fromName, setFromName] = useState("CampaignIQ");
   const [fromEmail, setFromEmail] = useState(user?.email || "");
@@ -20,6 +21,14 @@ export default function SettingsPage() {
   const [notifyOnBounce, setNotifyOnBounce] = useState(true);
   const [notifyWeeklyReport, setNotifyWeeklyReport] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [billingPlan, setBillingPlan] = useState(user?.plan || "Starter");
+
+  useEffect(() => {
+    if (!token) return;
+    apiRequest<{ plan: string }>("/api/stripe/billing", {}, token)
+      .then((data) => setBillingPlan(data.plan))
+      .catch(() => undefined);
+  }, [token]);
 
   const handleSave = () => {
     setSaved(true);
@@ -89,7 +98,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h2 className="text-lg font-bold text-gray-900">API Keys</h2>
-                <p className="text-sm text-gray-400">Manage your integration keys.</p>
+                <p className="text-sm text-gray-400">Current plan: {billingPlan}</p>
               </div>
             </div>
             <div className="space-y-4">

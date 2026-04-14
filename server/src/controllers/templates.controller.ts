@@ -4,7 +4,7 @@ import { prisma } from '../prisma';
 // Get all templates for user
 export const getTemplates = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const templates = await prisma.template.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -19,7 +19,7 @@ export const getTemplates = async (req: Request, res: Response) => {
 // Create template
 export const createTemplate = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const { name, htmlContent } = req.body;
 
     if (!name || !htmlContent) {
@@ -39,8 +39,8 @@ export const createTemplate = async (req: Request, res: Response) => {
 // Update template
 export const updateTemplate = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const { id } = req.params;
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
     const { name, htmlContent } = req.body;
 
     const existing = await prisma.template.findFirst({ where: { id, userId } });
@@ -60,8 +60,8 @@ export const updateTemplate = async (req: Request, res: Response) => {
 // Delete template
 export const deleteTemplate = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const { id } = req.params;
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
 
     await prisma.template.deleteMany({ where: { id, userId } });
     res.json({ message: 'Template deleted' });

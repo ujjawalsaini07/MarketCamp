@@ -2,6 +2,8 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { apiRequest } from "@/lib/api";
 import {
   HiOutlineSave,
   HiOutlineEye,
@@ -39,11 +41,13 @@ const defaultBlocks: Block[] = [
 ];
 
 export default function EmailBuilderPage() {
+  const { token } = useAuth();
   const [blocks, setBlocks] = useState<Block[]>(defaultBlocks);
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"edit" | "preview" | "code">("edit");
   const [templateName, setTemplateName] = useState("Untitled Template");
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [saveMessage, setSaveMessage] = useState("");
 
   const addBlock = (type: string) => {
     const newBlock: Block = {
@@ -152,6 +156,25 @@ export default function EmailBuilderPage() {
   };
 
   const selected = blocks.find((b) => b.id === selectedBlock);
+  const saveTemplate = async () => {
+    if (!token) return;
+    try {
+      await apiRequest(
+        "/api/templates",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: templateName || "Untitled Template",
+            htmlContent: generateHTML(),
+          }),
+        },
+        token
+      );
+      setSaveMessage("Template saved");
+    } catch (error: any) {
+      setSaveMessage(error.message);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -194,11 +217,12 @@ export default function EmailBuilderPage() {
                 <HiOutlineCode className="text-base" /> Code
               </button>
             </div>
-            <button className="btn-primary flex items-center gap-2 text-sm">
+            <button onClick={saveTemplate} className="btn-primary flex items-center gap-2 text-sm">
               <HiOutlineSave className="text-lg" /> Save Template
             </button>
           </div>
         </div>
+        {saveMessage ? <p className="text-sm text-brand-dark mb-3">{saveMessage}</p> : null}
 
         {viewMode === "code" ? (
           <div className="card !p-0 overflow-hidden">

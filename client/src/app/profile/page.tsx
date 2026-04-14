@@ -3,6 +3,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/context/AuthContext";
 import { useState } from "react";
+import { apiRequest } from "@/lib/api";
 import {
   HiOutlineUser,
   HiOutlineMail,
@@ -12,14 +13,27 @@ import {
 } from "react-icons/hi";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, token, setUser } = useAuth();
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!token) return;
+    await apiRequest<{ user: any }>(
+      "/api/auth/profile",
+      { method: "PATCH", body: JSON.stringify({ name, email }) },
+      token
+    ).then((data) => setUser(data.user));
+    if (currentPassword && newPassword) {
+      await apiRequest(
+        "/api/auth/password",
+        { method: "PATCH", body: JSON.stringify({ currentPassword, newPassword }) },
+        token
+      );
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };

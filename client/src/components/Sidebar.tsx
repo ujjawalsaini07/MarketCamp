@@ -20,6 +20,7 @@ const navItems = [
   { href: "/email-builder", label: "Email Builder", icon: HiOutlineTemplate },
   { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
   { href: "/pricing", label: "Plans", icon: HiOutlineCreditCard },
+  { href: "/payment-gateway", label: "Payment", icon: HiOutlineCreditCard },
   { href: "/settings", label: "Settings", icon: HiOutlineCog },
   { href: "/profile", label: "Profile", icon: HiOutlineUser },
 ];

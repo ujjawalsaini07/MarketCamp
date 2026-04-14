@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { apiRequest } from "@/lib/api";
 
 interface User {
   id: string;
@@ -15,12 +16,12 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -39,16 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchMe = async (t: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${t}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-      } else {
-        localStorage.removeItem("token");
-        setToken(null);
-      }
+      const data = await apiRequest<{ user: User }>("/api/auth/me", {}, t);
+      setUser(data.user);
     } catch {
       localStorage.removeItem("token");
       setToken(null);
@@ -58,26 +51,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
+    const data = await apiRequest<{ token: string; user: User }>("/api/auth/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message);
     setToken(data.token);
     setUser(data.user);
     localStorage.setItem("token", data.token);
   };
 
   const register = async (email: string, password: string, name: string) => {
-    const res = await fetch(`${API_URL}/api/auth/register`, {
+    const data = await apiRequest<{ token: string; user: User }>("/api/auth/register", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, name }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message);
     setToken(data.token);
     setUser(data.user);
     localStorage.setItem("token", data.token);
@@ -89,8 +76,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("token");
   };
 
+  const refreshUser = async () => {
+    if (!token) return;
+    await fetchMe(token);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, refreshUser, setUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

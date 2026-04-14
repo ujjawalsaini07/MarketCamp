@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import { prisma } from '../prisma';
+import { appConfig } from '../config';
 
 // Get all campaigns for user
 export const getCampaigns = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const campaigns = await prisma.campaign.findMany({
       where: { userId },
       include: { template: true, audiences: true },
@@ -20,8 +21,8 @@ export const getCampaigns = async (req: Request, res: Response) => {
 // Get single campaign
 export const getCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const { id } = req.params;
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
     const campaign = await prisma.campaign.findFirst({
       where: { id, userId },
       include: { template: true, audiences: { include: { contacts: true } }, events: true },
@@ -37,7 +38,7 @@ export const getCampaign = async (req: Request, res: Response) => {
 // Create campaign
 export const createCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = String((req as any).user.id);
     const { name, subject, templateId, audienceIds } = req.body;
 
     if (!name || !subject) {
@@ -64,8 +65,8 @@ export const createCampaign = async (req: Request, res: Response) => {
 // Update campaign
 export const updateCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const { id } = req.params;
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
     const { name, subject, status, templateId } = req.body;
 
     const existing = await prisma.campaign.findFirst({ where: { id, userId } });
@@ -90,8 +91,8 @@ export const updateCampaign = async (req: Request, res: Response) => {
 // Delete campaign
 export const deleteCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const { id } = req.params;
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
 
     // Delete related events first
     await prisma.campaignEvent.deleteMany({ where: { campaignId: id } });
@@ -106,8 +107,8 @@ export const deleteCampaign = async (req: Request, res: Response) => {
 // Send campaign (trigger bulk email)
 export const sendCampaign = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.id;
-    const { id } = req.params;
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
 
     const campaign = await prisma.campaign.findFirst({
       where: { id, userId },
@@ -122,9 +123,9 @@ export const sendCampaign = async (req: Request, res: Response) => {
     if (campaign.audiences.length === 0) return res.status(400).json({ message: 'Campaign needs at least one audience' });
 
     // Collect unique contacts
-    const contactMap = new Map();
-    campaign.audiences.forEach((aud) => {
-      aud.contacts.forEach((c) => contactMap.set(c.id, c));
+    const contactMap = new Map<string, { id: string; email: string }>();
+    campaign.audiences.forEach((aud: any) => {
+      aud.contacts.forEach((c: any) => contactMap.set(c.id, c));
     });
     const contacts = Array.from(contactMap.values());
 
@@ -139,8 +140,10 @@ export const sendCampaign = async (req: Request, res: Response) => {
     });
 
     // Dispatch emails (in production, this would use BullMQ)
-    const emailServiceUrl = process.env.EMAIL_SERVICE_URL;
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`;
+    if (!appConfig.emailServiceUrl) {
+      return res.status(500).json({ message: 'EMAIL_SERVICE_URL is not configured' });
+    }
+    const backendUrl = appConfig.backendUrl || `http://localhost:${appConfig.port}`;
     let sentCount = 0;
 
     for (const contact of contacts) {
@@ -157,21 +160,24 @@ export const sendCampaign = async (req: Request, res: Response) => {
 
         // Rewrite links for click tracking
         htmlContent = htmlContent.replace(
-          /href="(https?:\/\/[^"]+)"/g,
-          (match: string, url: string) => {
+          /href=(['"])(.*?)\1/gi,
+          (match: string, quote: string, url: string) => {
+            if (!url || !/^https?:\/\//i.test(url)) {
+              return match;
+            }
             const trackUrl = `${backendUrl}/api/track/click/${campaign.id}/${contact.id}?url=${encodeURIComponent(url)}`;
-            return `href="${trackUrl}"`;
+            return `href=${quote}${trackUrl}${quote}`;
           }
         );
 
         // Add unsubscribe link
-        const unsubLink = `${backendUrl}/api/track/unsubscribe/${contact.id}`;
+        const unsubLink = `${backendUrl}/api/track/unsubscribe/${contact.id}?campaignId=${campaign.id}`;
         htmlContent += `<p style="text-align:center;padding:16px;font-size:12px;color:#999;">
           <a href="${unsubLink}" style="color:#999;">Unsubscribe</a>
         </p>`;
 
         // Send via email service
-        await fetch(`${emailServiceUrl}/api/send`, {
+        const sendRes = await fetch(`${appConfig.emailServiceUrl}/api/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -179,6 +185,19 @@ export const sendCampaign = async (req: Request, res: Response) => {
             subject: campaign.subject,
             htmlContent,
           }),
+        });
+
+        if (!sendRes.ok) {
+          const errorText = await sendRes.text();
+          throw new Error(`Email service error: ${sendRes.status} ${errorText}`);
+        }
+
+        await prisma.campaignEvent.create({
+          data: {
+            type: 'SENT',
+            campaignId: campaign.id,
+            contactId: contact.id,
+          },
         });
 
         sentCount++;

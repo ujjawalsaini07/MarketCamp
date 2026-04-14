@@ -2,6 +2,7 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/context/AuthContext";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   HiOutlineMail,
@@ -13,48 +14,16 @@ import {
   HiOutlineTrendingUp,
   HiOutlineTrendingDown,
 } from "react-icons/hi";
+import { apiRequest } from "@/lib/api";
 
-const statsCards = [
-  {
-    title: "Total Campaigns",
-    value: "24",
-    change: "+3 this month",
-    trend: "up",
-    icon: HiOutlineMail,
-    color: "bg-brand-dark",
-  },
-  {
-    title: "Emails Sent",
-    value: "12,847",
-    change: "+18.2% vs last month",
-    trend: "up",
-    icon: HiOutlineEye,
-    color: "bg-brand-base",
-  },
-  {
-    title: "Avg. Open Rate",
-    value: "44.6%",
-    change: "+2.1% vs last month",
-    trend: "up",
-    icon: HiOutlineCursorClick,
-    color: "bg-emerald-500",
-  },
-  {
-    title: "Total Contacts",
-    value: "3,291",
-    change: "+127 this week",
-    trend: "up",
-    icon: HiOutlineUserGroup,
-    color: "bg-amber-500",
-  },
-];
-
-const recentCampaigns = [
-  { name: "Spring Sale Announcement", status: "COMPLETED", sent: 2450, opened: 1102, clicked: 387, date: "Apr 8" },
-  { name: "Weekly Newsletter #12", status: "COMPLETED", sent: 3100, opened: 1395, clicked: 496, date: "Apr 5" },
-  { name: "Product Launch Teaser", status: "SENDING", sent: 890, opened: 0, clicked: 0, date: "Apr 10" },
-  { name: "Re-engagement Series", status: "DRAFT", sent: 0, opened: 0, clicked: 0, date: "Apr 10" },
-];
+interface Overview {
+  totalCampaigns: number;
+  totalSent: number;
+  totalOpens: number;
+  totalClicks: number;
+  totalContacts: number;
+  avgOpenRate: string;
+}
 
 const statusStyles: Record<string, string> = {
   COMPLETED: "bg-emerald-50 text-emerald-600 border-emerald-100",
@@ -64,7 +33,29 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      apiRequest<Overview>("/api/track/analytics/overview", {}, token),
+      apiRequest<{ campaigns: any[] }>("/api/campaigns", {}, token),
+    ])
+      .then(([ov, camps]) => {
+        setOverview(ov);
+        setRecentCampaigns(camps.campaigns.slice(0, 5));
+      })
+      .catch(() => undefined);
+  }, [token]);
+
+  const statsCards = [
+    { title: "Total Campaigns", value: String(overview?.totalCampaigns || 0), change: "Live", trend: "up", icon: HiOutlineMail, color: "bg-brand-dark" },
+    { title: "Emails Sent", value: (overview?.totalSent || 0).toLocaleString(), change: "Live", trend: "up", icon: HiOutlineEye, color: "bg-brand-base" },
+    { title: "Avg. Open Rate", value: `${overview?.avgOpenRate || "0"}%`, change: "Live", trend: "up", icon: HiOutlineCursorClick, color: "bg-emerald-500" },
+    { title: "Total Contacts", value: (overview?.totalContacts || 0).toLocaleString(), change: "Live", trend: "up", icon: HiOutlineUserGroup, color: "bg-amber-500" },
+  ];
 
   return (
     <DashboardLayout>
@@ -130,16 +121,16 @@ export default function DashboardPage() {
                 </thead>
                 <tbody>
                   {recentCampaigns.map((c) => (
-                    <tr key={c.name} className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors">
+                    <tr key={c.id} className="border-t border-gray-50 hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 text-sm font-semibold text-gray-900">{c.name}</td>
                       <td className="px-6 py-4">
                         <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${statusStyles[c.status]}`}>
                           {c.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{c.sent.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{c.opened.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-sm text-gray-400">{c.date}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{c.sentCount?.toLocaleString?.() ?? 0}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{c.openCount?.toLocaleString?.() ?? 0}</td>
+                      <td className="px-6 py-4 text-sm text-gray-400">{new Date(c.createdAt).toLocaleDateString()}</td>
                     </tr>
                   ))}
                 </tbody>
