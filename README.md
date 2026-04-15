@@ -41,7 +41,7 @@ CampaignIQ is an email marketing SaaS MVP with:
   - `FRONTEND_URL` on backend
   - `BACKEND_URL` on backend
   - `NEXT_PUBLIC_API_URL` on frontend
-  - `ALLOWED_ORIGIN` on relay
+  - `ALLOWED_ORIGINS` on relay (comma-separated if multiple)
 
 ## Completed MVP features
 - Auth: register/login/me/profile/password update.
