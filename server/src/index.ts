@@ -1,6 +1,7 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import contactsRoutes from './routes/contacts.routes';
 import audiencesRoutes from './routes/audiences.routes';
@@ -10,7 +11,6 @@ import trackingRoutes from './routes/tracking.routes';
 import stripeRoutes from './routes/stripe.routes';
 import { appConfig } from './config';
 
-dotenv.config();
 
 const app = express();
 const port = appConfig.port;
