@@ -2,7 +2,7 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/context/AuthContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -33,7 +33,7 @@ const statusStyles: Record<string, string> = {
   SCHEDULED: "bg-amber-50 text-amber-600 border-amber-100",
 };
 
-export default function DashboardPage() {
+function DashboardContent() {
   const { user, token, refreshUser } = useAuth();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
@@ -232,5 +232,12 @@ export default function DashboardPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading dashboard...</div>}>
+      <DashboardContent />
+    </Suspense>
   );
 }
