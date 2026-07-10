@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { HiOutlineCheck, HiArrowRight, HiOutlineLightningBolt } from "react-icons/hi";
 import { apiRequest } from "@/lib/api";
 
@@ -15,7 +16,7 @@ const plans = [
     features: [
       "Up to 3 active campaigns",
       "1,000 contacts",
-      "1,000 emails/month",
+      "1,000 total emails",
       "Drag & drop email builder",
       "Basic analytics",
       "Email support",
@@ -36,7 +37,7 @@ const plans = [
     features: [
       "Up to 15 active campaigns",
       "10,000 contacts",
-      "50,000 emails/month",
+      "50,000 total emails",
       "Drag & drop email builder",
       "Advanced analytics",
       "A/B testing",
@@ -48,7 +49,7 @@ const plans = [
       "Custom reporting & export",
       "Dedicated account manager",
     ],
-    cta: "Start Free Trial",
+    cta: "Start Now",
     popular: true,
   },
   {
@@ -58,7 +59,7 @@ const plans = [
     features: [
       "Unlimited campaigns",
       "100,000 contacts",
-      "500,000 emails/month",
+      "500,000 total emails",
       "Drag & drop email builder",
       "Custom analytics & export",
       "A/B testing",
@@ -76,11 +77,14 @@ const plans = [
 
 export default function PricingPage() {
   const { user, token, refreshUser } = useAuth();
-  const [annual, setAnnual] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const router = useRouter();
 
   const checkout = async (planName: string) => {
-    if (!token) return;
+    if (!token) {
+      router.push("/register");
+      return;
+    }
     setLoadingPlan(planName);
     try {
       const plan = planName.toLowerCase();
@@ -93,6 +97,8 @@ export default function PricingPage() {
         await refreshUser();
       }
       window.location.href = data.url;
+    } catch (err) {
+      // Ignore error to avoid leaking to console
     } finally {
       setLoadingPlan(null);
     }
@@ -110,32 +116,13 @@ export default function PricingPage() {
               <HiOutlineLightningBolt className="text-brand-dark text-sm" />
               <span className="text-sm font-medium text-brand-dark">Simple, transparent pricing</span>
             </div>
+            <a id="choose-plan"></a>
             <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
               Choose your <span className="gradient-text">growth plan</span>
             </h1>
             <p className="text-gray-500 text-lg max-w-xl mx-auto mb-8">
-              Start free, upgrade when you&apos;re ready. All plans include a 14-day free trial.
+              Start free, upgrade when you&apos;re ready. All plans are a one-time lifetime payment.
             </p>
-
-            {/* Billing toggle */}
-            <div className="inline-flex items-center gap-3 bg-gray-100 rounded-xl p-1">
-              <button
-                onClick={() => setAnnual(false)}
-                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  !annual ? "bg-white shadow-sm text-brand-dark" : "text-gray-500"
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setAnnual(true)}
-                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  annual ? "bg-white shadow-sm text-brand-dark" : "text-gray-500"
-                }`}
-              >
-                Annual <span className="text-emerald-500 font-bold">-20%</span>
-              </button>
-            </div>
           </div>
 
           {/* Plans Grid */}
@@ -165,15 +152,10 @@ export default function PricingPage() {
                 <div className="mb-6">
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-extrabold text-gray-900">
-                      ${annual ? Math.round(plan.price * 0.8) : plan.price}
+                      ${plan.price}
                     </span>
-                    <span className="text-gray-400 text-sm">/month</span>
+                    <span className="text-gray-400 text-sm">one-time</span>
                   </div>
-                  {annual && (
-                    <p className="text-xs text-emerald-500 font-semibold mt-1">
-                      Save ${Math.round(plan.price * 0.2 * 12)}/year
-                    </p>
-                  )}
                 </div>
 
                 <button

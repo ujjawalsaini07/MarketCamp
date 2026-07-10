@@ -6,15 +6,13 @@ import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import {
   HiOutlineMail,
-  HiOutlineGlobe,
   HiOutlineBell,
   HiOutlineShieldCheck,
   HiOutlineSave,
 } from "react-icons/hi";
 
 export default function SettingsPage() {
-  const { user, token } = useAuth();
-  const [emailServiceUrl, setEmailServiceUrl] = useState("https://your-emailvercel.vercel.app");
+  const { user, token, setUser } = useAuth();
   const [fromName, setFromName] = useState("CampaignIQ");
   const [fromEmail, setFromEmail] = useState(user?.email || "");
   const [notifyOnComplete, setNotifyOnComplete] = useState(true);
@@ -24,15 +22,45 @@ export default function SettingsPage() {
   const [billingPlan, setBillingPlan] = useState(user?.plan || "Starter");
 
   useEffect(() => {
+    if ((user as any)?.settings) {
+      const s = (user as any).settings;
+      if (s.fromName !== undefined) setFromName(s.fromName);
+      if (s.fromEmail !== undefined) setFromEmail(s.fromEmail);
+      if (s.notifyOnComplete !== undefined) setNotifyOnComplete(s.notifyOnComplete);
+      if (s.notifyOnBounce !== undefined) setNotifyOnBounce(s.notifyOnBounce);
+      if (s.notifyWeeklyReport !== undefined) setNotifyWeeklyReport(s.notifyWeeklyReport);
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (!token) return;
     apiRequest<{ plan: string }>("/api/stripe/billing", {}, token)
       .then((data) => setBillingPlan(data.plan))
       .catch(() => undefined);
   }, [token]);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleSave = async () => {
+    if (!token) return;
+    try {
+      const settings = {
+        fromName,
+        fromEmail,
+        notifyOnComplete,
+        notifyOnBounce,
+        notifyWeeklyReport
+      };
+      await apiRequest('/api/auth/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ settings })
+      }, token);
+      
+      setUser({ ...user, settings } as any);
+      
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setSaved(false);
+    }
   };
 
   return (
@@ -56,17 +84,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email Service URL</label>
-                <input
-                  type="url"
-                  value={emailServiceUrl}
-                  onChange={(e) => setEmailServiceUrl(e.target.value)}
-                  placeholder="https://your-email-api.vercel.app"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-base/40 focus:border-brand-base transition-all"
-                />
-                <p className="text-xs text-gray-400 mt-1.5">Your deployed emailvercel instance URL</p>
-              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">From Name</label>
@@ -90,30 +108,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* API Keys */}
-          <div className="card">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-brand-base flex items-center justify-center">
-                <HiOutlineGlobe className="text-white text-xl" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">API Keys</h2>
-                <p className="text-sm text-gray-400">Current plan: {billingPlan}</p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Stripe Secret Key</label>
-                <input
-                  type="password"
-                  value="sk_test_••••••••••••••••"
-                  readOnly
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-500 cursor-not-allowed"
-                />
-                <p className="text-xs text-gray-400 mt-1.5">Configured via environment variables</p>
-              </div>
-            </div>
-          </div>
+
 
           {/* Notifications */}
           <div className="card">

@@ -12,15 +12,15 @@ import {
   HiOutlineUser,
   HiOutlineCreditCard,
   HiOutlineLogout,
+  HiOutlineUserGroup,
 } from "react-icons/hi";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: HiOutlineHome },
   { href: "/campaigns", label: "Campaigns", icon: HiOutlineMail },
-  { href: "/email-builder", label: "Email Builder", icon: HiOutlineTemplate },
+  { href: "/contacts", label: "Contacts", icon: HiOutlineUserGroup },
+  { href: "/templates", label: "Templates", icon: HiOutlineTemplate },
   { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
-  { href: "/pricing", label: "Plans", icon: HiOutlineCreditCard },
-  { href: "/payment-gateway", label: "Payment", icon: HiOutlineCreditCard },
   { href: "/settings", label: "Settings", icon: HiOutlineCog },
   { href: "/profile", label: "Profile", icon: HiOutlineUser },
 ];

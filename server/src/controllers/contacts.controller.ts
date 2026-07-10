@@ -97,12 +97,40 @@ export const importContacts = async (req: Request, res: Response) => {
     res.json({
       message: `Imported ${contacts.length} contacts`,
       imported: contacts.length,
+      contactIds: contacts.map((c) => c.id),
       errors: errors.length,
       errorDetails: errors.slice(0, 10),
     });
   } catch (error) {
     console.error('Import contacts error:', error);
     res.status(500).json({ message: 'Failed to parse CSV data' });
+  }
+};
+
+// Update a contact
+export const updateContact = async (req: Request, res: Response) => {
+  try {
+    const userId = String((req as any).user.id);
+    const id = String(req.params.id);
+    const { name, email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const contact = await prisma.contact.updateMany({
+      where: { id, userId },
+      data: { name, email },
+    });
+    
+    if (contact.count === 0) {
+      return res.status(404).json({ message: 'Contact not found' });
+    }
+    
+    res.json({ message: 'Contact updated successfully' });
+  } catch (error) {
+    console.error('Update contact error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 };
 

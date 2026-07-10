@@ -4,6 +4,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   HiOutlineMail,
   HiOutlineEye,
@@ -33,12 +34,31 @@ const statusStyles: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { user, token } = useAuth();
+  const { user, token, refreshUser } = useAuth();
   const [overview, setOverview] = useState<Overview | null>(null);
   const [recentCampaigns, setRecentCampaigns] = useState<any[]>([]);
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     if (!token) return;
+
+    // Verify Stripe payment if redirected back
+    const verifyPayment = async () => {
+      const isSuccess = searchParams.get("payment") === "success";
+      const sessionId = searchParams.get("session_id");
+      if (isSuccess && sessionId) {
+        try {
+          await apiRequest(`/api/stripe/verify?session_id=${sessionId}`, {}, token);
+          if (refreshUser) await refreshUser();
+          router.replace("/dashboard");
+        } catch (e) {
+          // Ignore verification error in console
+        }
+      }
+    };
+    verifyPayment();
+
     Promise.all([
       apiRequest<Overview>("/api/track/analytics/overview", {}, token),
       apiRequest<{ campaigns: any[] }>("/api/campaigns", {}, token),
@@ -192,12 +212,21 @@ export default function DashboardPage() {
               <p className="text-white/60 text-sm mt-1">
                 {user?.plan === "Starter" ? "1,000 emails/mo" : user?.plan === "Pro" ? "10,000 emails/mo" : "100,000 emails/mo"}
               </p>
-              <Link
-                href="/pricing"
-                className="mt-4 inline-flex items-center gap-1 text-brand-light text-sm font-semibold hover:text-white transition-colors"
-              >
-                Upgrade Plan <HiArrowRight />
-              </Link>
+              {user?.plan === "Starter" ? (
+                <Link
+                  href="/pricing"
+                  className="mt-4 inline-flex items-center gap-1 text-brand-light text-sm font-semibold hover:text-white transition-colors"
+                >
+                  Upgrade Plan <HiArrowRight />
+                </Link>
+              ) : (
+                <Link
+                  href="/settings"
+                  className="mt-4 inline-flex items-center gap-1 text-brand-light text-sm font-semibold hover:text-white transition-colors"
+                >
+                  Manage Plan <HiArrowRight />
+                </Link>
+              )}
             </div>
           </div>
         </div>

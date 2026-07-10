@@ -21,20 +21,18 @@ interface Overview {
   unsubscribeRate: string;
 }
 
-const dailyData = [
-  { day: "Mon", sent: 1240, opens: 558 },
-  { day: "Tue", sent: 1890, opens: 850 },
-  { day: "Wed", sent: 2340, opens: 1053 },
-  { day: "Thu", sent: 1680, opens: 756 },
-  { day: "Fri", sent: 2100, opens: 945 },
-  { day: "Sat", sent: 890, opens: 400 },
-  { day: "Sun", sent: 650, opens: 292 },
-];
-
-const maxSent = Math.max(...dailyData.map((d) => d.sent));
-
 export default function AnalyticsPage() {
   const { token } = useAuth();
+  const [dailyData, setDailyData] = useState([
+    { day: "Mon", sent: 0, opens: 0 },
+    { day: "Tue", sent: 0, opens: 0 },
+    { day: "Wed", sent: 0, opens: 0 },
+    { day: "Thu", sent: 0, opens: 0 },
+    { day: "Fri", sent: 0, opens: 0 },
+    { day: "Sat", sent: 0, opens: 0 },
+    { day: "Sun", sent: 0, opens: 0 },
+  ]);
+  const maxSent = Math.max(...dailyData.map((d) => d.sent), 10);
   const [overview, setOverview] = useState<Overview>({
     totalSent: 0,
     avgOpenRate: "0",
@@ -51,6 +49,25 @@ export default function AnalyticsPage() {
       apiRequest<{ campaigns: any[] }>("/api/campaigns", {}, token),
     ]).then(async ([ov, campaignsRes]) => {
       setOverview(ov);
+      
+      const newDaily = [
+        { day: "Sun", sent: 0, opens: 0 },
+        { day: "Mon", sent: 0, opens: 0 },
+        { day: "Tue", sent: 0, opens: 0 },
+        { day: "Wed", sent: 0, opens: 0 },
+        { day: "Thu", sent: 0, opens: 0 },
+        { day: "Fri", sent: 0, opens: 0 },
+        { day: "Sat", sent: 0, opens: 0 },
+      ];
+      if (campaignsRes.campaigns) {
+         campaignsRes.campaigns.forEach((c) => {
+           const d = new Date(c.createdAt).getDay();
+           newDaily[d].sent += c.sentCount || 0;
+           newDaily[d].opens += c.openCount || 0;
+         });
+      }
+      setDailyData([...newDaily.slice(1), newDaily[0]]);
+
       const withAnalytics = await Promise.all(
         campaignsRes.campaigns.map(async (campaign) => {
           const metrics = await apiRequest<any>(`/api/track/analytics/${campaign.id}`, {}, token);

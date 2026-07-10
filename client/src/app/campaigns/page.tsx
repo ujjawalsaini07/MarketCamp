@@ -2,9 +2,55 @@
 
 import DashboardLayout from "@/components/DashboardLayout";
 import { useEffect, useState } from "react";
-import { HiOutlineSearch, HiOutlineMail, HiOutlineEye, HiOutlineCursorClick, HiOutlineTrash, HiOutlinePlay } from "react-icons/hi";
+import { HiOutlineSearch, HiOutlineMail, HiOutlineEye, HiOutlineCursorClick, HiOutlineTrash, HiOutlinePlus, HiOutlineChevronDown, HiOutlinePlay } from "react-icons/hi";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
+
+function CustomDropdown({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: {id: string, name: string}[]; placeholder: string }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  
+  const selected = options.find((o) => o.id === value);
+  const filtered = options.filter(o => o.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="relative">
+      <div 
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer flex items-center justify-between text-sm hover:border-brand-base transition-colors"
+      >
+        <span className={selected ? "text-gray-900" : "text-gray-400"}>{selected ? selected.name : placeholder}</span>
+        <HiOutlineChevronDown className="text-gray-400" />
+      </div>
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 shadow-xl rounded-lg z-50 overflow-hidden">
+          <div className="p-2 border-b border-gray-50">
+            <input 
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search..." 
+              className="w-full px-2 py-1 text-sm bg-gray-50 rounded outline-none"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.map(opt => (
+              <div 
+                key={opt.id}
+                onClick={() => { onChange(opt.id); setOpen(false); setSearch(""); }}
+                className="px-3 py-2 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-dark cursor-pointer transition-colors"
+              >
+                {opt.name}
+              </div>
+            ))}
+            {filtered.length === 0 && <div className="px-3 py-3 text-xs text-gray-400 text-center">No results</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type CampaignStatus = "DRAFT" | "SCHEDULED" | "SENDING" | "COMPLETED";
 interface Campaign {
@@ -42,18 +88,17 @@ const statusStyles: Record<CampaignStatus, string> = {
 const statusFilters: CampaignStatus[] = ["DRAFT", "SCHEDULED", "SENDING", "COMPLETED"];
 
 export default function CampaignsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<string>("ALL");
+  const [activeFilter, setActiveFilter] = useState<"ALL" | CampaignStatus>("ALL");
+  const router = useRouter();
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [audienceId, setAudienceId] = useState("");
-  const [csvData, setCsvData] = useState("email,name\njohn@example.com,John Doe");
-  const [audienceName, setAudienceName] = useState("Imported Contacts");
   const [message, setMessage] = useState("");
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [recipients, setRecipients] = useState<RecipientStatus[]>([]);
@@ -81,6 +126,10 @@ export default function CampaignsPage() {
   });
 
   const createCampaign = async () => {
+    if (user?.plan === "Starter") {
+      router.push("/pricing");
+      return;
+    }
     if (!token || !name || !subject || !templateId || !audienceId) return;
     try {
       await apiRequest(
@@ -88,6 +137,7 @@ export default function CampaignsPage() {
         {
           method: "POST",
           body: JSON.stringify({ name, subject, templateId, audienceIds: [audienceId] }),
+          showProgress: true,
         },
         token
       );
@@ -136,19 +186,7 @@ export default function CampaignsPage() {
     }
   };
 
-  const importContacts = async () => {
-    if (!token) return;
-    try {
-      await apiRequest("/api/contacts/import", { method: "POST", body: JSON.stringify({ csvData }) }, token);
-      const contactsRes = await apiRequest<{ contacts: { id: string }[] }>("/api/contacts", {}, token);
-      const contactIds = contactsRes.contacts.map((c) => c.id);
-      await apiRequest("/api/audiences", { method: "POST", body: JSON.stringify({ name: audienceName, contactIds }) }, token);
-      await load();
-      setMessage("Contacts imported and audience created");
-    } catch (error: any) {
-      setMessage(error.message);
-    }
-  };
+
 
   return (
     <DashboardLayout>
@@ -163,33 +201,26 @@ export default function CampaignsPage() {
         </div>
 
         <div className="card mb-6 grid md:grid-cols-2 gap-3">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name" className="px-3 py-2 rounded-lg border" />
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" className="px-3 py-2 rounded-lg border" />
-          <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className="px-3 py-2 rounded-lg border">
-            <option value="">Select template</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <select value={audienceId} onChange={(e) => setAudienceId(e.target.value)} className="px-3 py-2 rounded-lg border">
-            <option value="">Select audience</option>
-            {audiences.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-          <button onClick={createCampaign} className="btn-primary">Create Campaign</button>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Campaign name" className="px-3 py-2 rounded-lg border focus:ring-1 focus:ring-brand-base" />
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" className="px-3 py-2 rounded-lg border focus:ring-1 focus:ring-brand-base" />
+          
+          <CustomDropdown 
+            value={templateId} 
+            onChange={setTemplateId} 
+            options={templates} 
+            placeholder="Select a Template" 
+          />
+          <CustomDropdown 
+            value={audienceId} 
+            onChange={setAudienceId} 
+            options={audiences} 
+            placeholder="Select an Audience" 
+          />
+
+          <button onClick={createCampaign} className="btn-primary md:col-span-2">Create Campaign</button>
         </div>
 
-        <div className="card mb-6">
-          <p className="font-semibold mb-2">Bulk import contacts (CSV)</p>
-          <input value={audienceName} onChange={(e) => setAudienceName(e.target.value)} placeholder="Audience name" className="px-3 py-2 rounded-lg border mb-3 w-full" />
-          <textarea value={csvData} onChange={(e) => setCsvData(e.target.value)} rows={5} className="w-full px-3 py-2 rounded-lg border font-mono text-xs" />
-          <button onClick={importContacts} className="btn-primary mt-3">Import and Create Audience</button>
-        </div>
+
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">

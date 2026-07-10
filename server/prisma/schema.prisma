@@ -16,10 +16,13 @@ model User {
   email     String   @unique
   password  String
   name      String?
-  plan      String   @default("Starter") // Starter, Pro, Business
-  stripeId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  plan                String   @default("Starter") // Starter, Pro, Business
+  stripeId            String?
+  passwordChangeCount Int      @default(0)
+  lastPasswordChange  DateTime?
+  settings            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   contacts   Contact[]
   audiences  Audience[]

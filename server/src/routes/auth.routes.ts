@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, me, updateProfile, updatePassword } from '../controllers/auth.controller';
+import { register, login, me, updateProfile, updatePassword, updateSettings } from '../controllers/auth.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -9,5 +9,6 @@ router.post('/login', login);
 router.get('/me', requireAuth, me);
 router.patch('/profile', requireAuth, updateProfile);
 router.patch('/password', requireAuth, updatePassword);
+router.patch('/settings', requireAuth, updateSettings);
 
 export default router;

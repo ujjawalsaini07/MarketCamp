@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "@/components/Providers";
+import GlobalProgress from "@/components/GlobalProgress";
 
 export const metadata: Metadata = {
   title: "CampaignIQ — Smart Email Marketing Platform",
@@ -16,6 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
+        <GlobalProgress />
         <Providers>{children}</Providers>
       </body>
     </html>

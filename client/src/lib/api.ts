@@ -4,7 +4,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export async function apiRequest<T>(
   path: string,
-  options: RequestInit = {},
+  options: RequestInit & { showProgress?: boolean } = {},
   token?: string | null
 ): Promise<T> {
   const headers: Record<string, string> = {
@@ -15,15 +15,27 @@ export async function apiRequest<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message || "Request failed");
+  const { showProgress, ...fetchOptions } = options;
+
+  if (showProgress && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("apiRequestStart"));
   }
-  return data as T;
+
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      ...fetchOptions,
+      headers,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.message || "Request failed");
+    }
+    return data as T;
+  } finally {
+    if (showProgress && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("apiRequestEnd"));
+    }
+  }
 }
 
 export { API_URL };

@@ -10,9 +10,9 @@ const stripe = appConfig.stripeSecretKey
   : null;
 
 const PLANS: Record<string, { priceId: string; name: string }> = {
-  starter: { priceId: 'price_starter_monthly', name: 'Starter' },
-  pro: { priceId: 'price_pro_monthly', name: 'Pro' },
-  business: { priceId: 'price_business_monthly', name: 'Business' },
+  starter: { priceId: process.env.STRIPE_PRICE_STARTER || 'price_starter_onetime', name: 'Starter' },
+  pro: { priceId: process.env.STRIPE_PRICE_PRO || 'price_pro_onetime', name: 'Pro' },
+  business: { priceId: process.env.STRIPE_PRICE_BUSINESS || 'price_business_onetime', name: 'Business' },
 };
 
 // Create Stripe checkout session
@@ -58,7 +58,7 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      mode: 'subscription',
+      mode: 'payment',
       payment_method_types: ['card'],
       line_items: [
         {
@@ -66,7 +66,7 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
           quantity: 1,
         },
       ],
-      success_url: `${frontendUrl}/dashboard?payment=success&plan=${plan}`,
+      success_url: `${frontendUrl}/dashboard?payment=success&plan=${plan}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/pricing?payment=cancelled`,
       metadata: { userId, plan },
     });
@@ -141,5 +141,40 @@ export const getBillingInfo = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get billing info error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Verify session directly (useful for local development where webhooks may fail)
+export const verifySession = async (req: Request, res: Response) => {
+  if (!stripe) {
+    return res.status(400).json({ message: 'Stripe is not configured' });
+  }
+
+  const { session_id } = req.query;
+  const userId = String((req as any).user.id);
+
+  if (!session_id || typeof session_id !== 'string') {
+    return res.status(400).json({ message: 'Missing session_id' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    if (!session || session.payment_status !== 'paid') {
+      return res.status(400).json({ message: 'Payment not completed' });
+    }
+
+    const planKey = session.metadata?.plan;
+    if (session.metadata?.userId === userId && planKey && PLANS[planKey]) {
+      const user = await prisma.user.update({
+        where: { id: userId },
+        data: { plan: PLANS[planKey].name },
+      });
+      return res.json({ message: 'Payment verified successfully', plan: user.plan });
+    }
+
+    res.status(400).json({ message: 'Invalid session metadata' });
+  } catch (error) {
+    console.error('Verify session error:', error);
+    res.status(500).json({ message: 'Failed to verify session' });
   }
 };

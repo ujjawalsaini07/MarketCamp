@@ -16,26 +16,43 @@ export default function ProfilePage() {
   const { user, token, setUser } = useAuth();
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSave = async () => {
     if (!token) return;
-    await apiRequest<{ user: any }>(
-      "/api/auth/profile",
-      { method: "PATCH", body: JSON.stringify({ name, email }) },
-      token
-    ).then((data) => setUser(data.user));
-    if (currentPassword && newPassword) {
-      await apiRequest(
-        "/api/auth/password",
-        { method: "PATCH", body: JSON.stringify({ currentPassword, newPassword }) },
-        token
-      );
+    setError("");
+    try {
+      if (name !== user?.name || email !== user?.email) {
+        const data = await apiRequest<{ user: any }>(
+          "/api/auth/profile",
+          { method: "PATCH", body: JSON.stringify({ name, email }) },
+          token
+        );
+        setUser(data.user);
+      }
+      
+      
+      if (newPassword) {
+        if (newPassword !== confirmPassword) {
+          throw new Error("Passwords do not match");
+        }
+        await apiRequest(
+          "/api/auth/password",
+          { method: "PATCH", body: JSON.stringify({ newPassword }) },
+          token
+        );
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+      
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: any) {
+      setError(err.message);
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
   };
 
   return (
@@ -123,20 +140,7 @@ export default function ProfilePage() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Current Password</label>
-                <div className="relative">
-                  <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-base/40 focus:border-brand-base transition-all"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">New Password</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">New Password <span className="text-gray-400 font-normal">(Max 2 changes/day)</span></label>
                 <div className="relative">
                   <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -148,11 +152,25 @@ export default function ProfilePage() {
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm New Password</label>
+                <div className="relative">
+                  <HiOutlineLockClosed className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repeat new password"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-base/40 focus:border-brand-base transition-all"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Save */}
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-brand-dark">{error || (saved ? "Profile updated successfully." : "")}</span>
             <button onClick={handleSave} className="btn-primary flex items-center gap-2">
               <HiOutlineSave className="text-lg" />
               {saved ? "Saved ✓" : "Save Changes"}
